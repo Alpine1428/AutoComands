@@ -19,17 +19,34 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Setup Gradle
+    - name: Create Gradle Wrapper
+      run: |
+        mkdir -p gradle/wrapper
+        cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
+        distributionBase=GRADLE_USER_HOME
+        distributionPath=wrapper/dists
+        distributionUrl=https\://services.gradle.org/distributions/gradle-8.8-bin.zip
+        zipStoreBase=GRADLE_USER_HOME
+        zipStorePath=wrapper/dists
+        EOF
+        # Скачиваем gradle-wrapper.jar
+        curl -sL -o gradle/wrapper/gradle-wrapper.jar \
+          https://raw.githubusercontent.com/gradle/gradle/v8.8.0/gradle/wrapper/gradle-wrapper.jar
+        # Создаём gradlew
+        cat > gradlew << 'SCRIPT'
+        #!/bin/sh
+        exec java -classpath "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" \
+          org.gradle.wrapper.GradleWrapperMain "$@"
+        SCRIPT
+        chmod +x gradlew
+
+    - name: Setup Gradle 8.8
       uses: gradle/actions/setup-gradle@v3
-
-    - name: Generate Gradle Wrapper
-      run: gradle wrapper --gradle-version 8.8
-
-    - name: Grant execute permission
-      run: chmod +x gradlew
+      with:
+        gradle-version: '8.8'
 
     - name: Build with Gradle
-      run: ./gradlew build
+      run: gradle build --no-daemon
 
     - name: Upload Mod JAR
       uses: actions/upload-artifact@v4
