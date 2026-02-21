@@ -11,5 +11,6 @@
 ## Установка
 1. Установите [Fabric Loader](https://fabricmc.net/use/installer/) для 1.20.1
 2. Установите [Fabric API](https://modrinth.com/mod/fabric-api) для 1.20.1
-3. Скачайте .jar из [Releases/Actions](https://github.com/Alpine1428/AutoComands/actions)
+3. Скачайте .jar 
 4. Положите в папку `.minecraft/mods/`
+
