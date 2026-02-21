@@ -1,4 +1,3 @@
-
 package com.commandspammer.gui;
 
 import com.commandspammer.CommandSender;
@@ -15,17 +14,15 @@ import java.util.List;
 public class CommandSpammerScreen extends Screen {
 
     private TextFieldWidget delayField;
-    private TextFieldWidget[] commandLines;
-    private static final int MAX_LINES = 30;
-    private static final int VISIBLE_LINES = 8;
 
-    private int activeLines = 5;
+    // Динамический список полей — без лимита
+    private List<TextFieldWidget> commandFields = new ArrayList<>();
     private int scrollOffset = 0;
+    private static final int VISIBLE_LINES = 10;
 
-    // Сохранение состояния между открытиями
-    private static String[] savedLines = new String[MAX_LINES];
+    // Сохранение между открытиями
+    private static List<String> savedCommands = new ArrayList<>();
     private static String savedDelay = "20";
-    private static int savedActiveLines = 5;
 
     public CommandSpammerScreen() {
         super(Text.literal("Command Spammer"));
@@ -34,7 +31,13 @@ public class CommandSpammerScreen extends Screen {
     @Override
     protected void init() {
         super.init();
-        activeLines = savedActiveLines;
+
+        // Если первый запуск — добавляем 5 пустых строк
+        if (savedCommands.isEmpty()) {
+            for (int i = 0; i < 5; i++) {
+                savedCommands.add("");
+            }
+        }
 
         int cx = this.width / 2;
         int sy = 25;
@@ -49,60 +52,68 @@ public class CommandSpammerScreen extends Screen {
         this.addDrawableChild(delayField);
 
         // ── Поля команд ──
-        commandLines = new TextFieldWidget[MAX_LINES];
+        commandFields.clear();
         int fieldsY = sy + 52;
 
-        for (int i = 0; i < MAX_LINES; i++) {
-            commandLines[i] = new TextFieldWidget(
+        for (int i = 0; i < savedCommands.size(); i++) {
+            TextFieldWidget field = new TextFieldWidget(
                     this.textRenderer, cx - 152, fieldsY, 304, 16,
                     Text.literal("cmd" + i));
-            commandLines[i].setMaxLength(256);
-            if (savedLines[i] != null) {
-                commandLines[i].setText(savedLines[i]);
-            }
-            commandLines[i].setPlaceholder(Text.literal("/command " + (i + 1)));
-            commandLines[i].visible = false;
+            field.setMaxLength(256);
+            field.setText(savedCommands.get(i));
+            field.setPlaceholder(Text.literal("/command " + (i + 1)));
+            field.visible = false;
+            commandFields.add(field);
         }
 
         refreshVisibleFields(fieldsY);
 
         // ── Кнопки ──
-        int btnY = fieldsY + Math.min(activeLines, VISIBLE_LINES) * 20 + 8;
+        int btnY = fieldsY + VISIBLE_LINES * 20 + 8;
 
-        // + / - строки
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("+"), b -> {
-            if (activeLines < MAX_LINES) { activeLines++; savedActiveLines = activeLines; rebuild(); }
-        }).dimensions(cx - 152, btnY, 30, 20).build());
+        // + добавить строку
+        this.addDrawableChild(ButtonWidget.builder(Text.literal("+ Add Line"), b -> {
+            savedCommands.add("");
+            rebuild();
+        }).dimensions(cx - 152, btnY, 80, 20).build());
 
+        // +10 строк
+        this.addDrawableChild(ButtonWidget.builder(Text.literal("+10"), b -> {
+            for (int i = 0; i < 10; i++) savedCommands.add("");
+            rebuild();
+        }).dimensions(cx - 68, btnY, 35, 20).build());
+
+        // +100 строк
+        this.addDrawableChild(ButtonWidget.builder(Text.literal("+100"), b -> {
+            for (int i = 0; i < 100; i++) savedCommands.add("");
+            rebuild();
+        }).dimensions(cx - 29, btnY, 42, 20).build());
+
+        // - убрать строку
         this.addDrawableChild(ButtonWidget.builder(Text.literal("-"), b -> {
-            if (activeLines > 1) {
-                commandLines[activeLines - 1].setText("");
-                activeLines--; savedActiveLines = activeLines; rebuild();
+            if (savedCommands.size() > 1) {
+                savedCommands.remove(savedCommands.size() - 1);
+                if (scrollOffset > Math.max(0, savedCommands.size() - VISIBLE_LINES)) {
+                    scrollOffset = Math.max(0, savedCommands.size() - VISIBLE_LINES);
+                }
+                rebuild();
             }
-        }).dimensions(cx - 118, btnY, 30, 20).build());
+        }).dimensions(cx + 17, btnY, 25, 20).build());
 
         // Вставить из буфера
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("Paste Clipboard"), b -> {
+        this.addDrawableChild(ButtonWidget.builder(Text.literal("Paste"), b -> {
             pasteClipboard();
-        }).dimensions(cx - 82, btnY, 110, 20).build());
+        }).dimensions(cx + 46, btnY, 50, 20).build());
 
         // Очистить
         this.addDrawableChild(ButtonWidget.builder(Text.literal("Clear"), b -> {
-            for (int i = 0; i < MAX_LINES; i++) {
-                commandLines[i].setText("");
-                savedLines[i] = null;
-            }
-            delayField.setText("20"); savedDelay = "20";
-        }).dimensions(cx + 32, btnY, 60, 20).build());
-
-        // Scroll up / down
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("^"), b -> {
-            if (scrollOffset > 0) { scrollOffset--; rebuild(); }
-        }).dimensions(cx + 96, btnY, 25, 20).build());
-
-        this.addDrawableChild(ButtonWidget.builder(Text.literal("v"), b -> {
-            if (scrollOffset < activeLines - VISIBLE_LINES) { scrollOffset++; rebuild(); }
-        }).dimensions(cx + 125, btnY, 25, 20).build());
+            savedCommands.clear();
+            for (int i = 0; i < 5; i++) savedCommands.add("");
+            scrollOffset = 0;
+            delayField.setText("20");
+            savedDelay = "20";
+            rebuild();
+        }).dimensions(cx + 100, btnY, 52, 20).build());
 
         btnY += 26;
 
@@ -116,8 +127,8 @@ public class CommandSpammerScreen extends Screen {
                 sender.setDelayTicks(20);
             }
             List<String> cmds = new ArrayList<>();
-            for (int i = 0; i < activeLines; i++) {
-                String t = commandLines[i].getText().trim();
+            for (String s : savedCommands) {
+                String t = s.trim();
                 if (!t.isEmpty()) cmds.add(t);
             }
             sender.setCommands(cmds);
@@ -135,15 +146,16 @@ public class CommandSpammerScreen extends Screen {
     }
 
     private void refreshVisibleFields(int fieldsY) {
-        for (int i = 0; i < MAX_LINES; i++) {
-            if (i >= scrollOffset && i < scrollOffset + VISIBLE_LINES && i < activeLines) {
+        for (int i = 0; i < commandFields.size(); i++) {
+            TextFieldWidget field = commandFields.get(i);
+            if (i >= scrollOffset && i < scrollOffset + VISIBLE_LINES) {
                 int vi = i - scrollOffset;
-                commandLines[i].setX(this.width / 2 - 152);
-                commandLines[i].setY(fieldsY + vi * 20);
-                commandLines[i].visible = true;
-                this.addDrawableChild(commandLines[i]);
+                field.setX(this.width / 2 - 152);
+                field.setY(fieldsY + vi * 20);
+                field.visible = true;
+                this.addDrawableChild(field);
             } else {
-                commandLines[i].visible = false;
+                field.visible = false;
             }
         }
     }
@@ -153,13 +165,23 @@ public class CommandSpammerScreen extends Screen {
             String clip = MinecraftClient.getInstance().keyboard.getClipboard();
             if (clip == null || clip.isEmpty()) return;
             String[] lines = clip.split("\\r?\\n");
-            if (lines.length > activeLines) {
-                activeLines = Math.min(lines.length, MAX_LINES);
-                savedActiveLines = activeLines;
+
+            saveState();
+            savedCommands.clear();
+
+            for (String line : lines) {
+                String trimmed = line.trim();
+                if (!trimmed.isEmpty()) {
+                    savedCommands.add(trimmed);
+                }
             }
-            for (int i = 0; i < Math.min(lines.length, MAX_LINES); i++) {
-                commandLines[i].setText(lines[i].trim());
+
+            // Минимум 1 строка
+            if (savedCommands.isEmpty()) {
+                savedCommands.add("");
             }
+
+            scrollOffset = 0;
             rebuild();
         } catch (Exception e) {
             e.printStackTrace();
@@ -173,11 +195,16 @@ public class CommandSpammerScreen extends Screen {
     }
 
     private void saveState() {
-        for (int i = 0; i < MAX_LINES; i++) {
-            if (commandLines != null && commandLines[i] != null)
-                savedLines[i] = commandLines[i].getText();
+        if (commandFields != null) {
+            for (int i = 0; i < commandFields.size(); i++) {
+                if (i < savedCommands.size()) {
+                    savedCommands.set(i, commandFields.get(i).getText());
+                }
+            }
         }
-        if (delayField != null) savedDelay = delayField.getText();
+        if (delayField != null) {
+            savedDelay = delayField.getText();
+        }
     }
 
     @Override
@@ -188,13 +215,11 @@ public class CommandSpammerScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mx, double my, double amt) {
-        if (activeLines > VISIBLE_LINES) {
-            scrollOffset -= (int) amt;
-            scrollOffset = Math.max(0, Math.min(scrollOffset, activeLines - VISIBLE_LINES));
-            rebuild();
-            return true;
-        }
-        return super.mouseScrolled(mx, my, amt);
+        int maxScroll = Math.max(0, savedCommands.size() - VISIBLE_LINES);
+        scrollOffset -= (int) amt;
+        scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
+        rebuild();
+        return true;
     }
 
     @Override
@@ -213,16 +238,35 @@ public class CommandSpammerScreen extends Screen {
                 Text.literal("\u00a7eDelay (ticks):"), cx - 60, 27, 0xFFFFFF);
 
         // Метка команд
+        int totalLines = savedCommands.size();
+        long filledLines = savedCommands.stream().filter(s -> !s.trim().isEmpty()).count();
         ctx.drawTextWithShadow(this.textRenderer,
-                Text.literal("\u00a7aCommands:"), cx - 152, 47, 0xFFFFFF);
+                Text.literal("\u00a7aCommands (" + filledLines + " filled / " + totalLines + " total):"),
+                cx - 152, 47, 0xFFFFFF);
 
         // Нумерация строк
         int fieldsY = 77;
-        for (int i = scrollOffset; i < Math.min(activeLines, scrollOffset + VISIBLE_LINES); i++) {
+        for (int i = scrollOffset; i < Math.min(savedCommands.size(), scrollOffset + VISIBLE_LINES); i++) {
             int vi = i - scrollOffset;
             ctx.drawTextWithShadow(this.textRenderer,
                     Text.literal("\u00a77" + (i + 1) + "."),
                     cx - 172, fieldsY + vi * 20 + 4, 0x888888);
+        }
+
+        // Скроллбар
+        if (savedCommands.size() > VISIBLE_LINES) {
+            int barX = cx + 156;
+            int barTopY = fieldsY;
+            int barHeight = VISIBLE_LINES * 20;
+            int maxScroll = savedCommands.size() - VISIBLE_LINES;
+
+            // Фон скроллбара
+            ctx.fill(barX, barTopY, barX + 4, barTopY + barHeight, 0x44FFFFFF);
+
+            // Ползунок
+            int thumbHeight = Math.max(10, barHeight * VISIBLE_LINES / savedCommands.size());
+            int thumbY = barTopY + (maxScroll > 0 ? (barHeight - thumbHeight) * scrollOffset / maxScroll : 0);
+            ctx.fill(barX, thumbY, barX + 4, thumbY + thumbHeight, 0xAAFFFFFF);
         }
 
         // Статус
@@ -231,17 +275,21 @@ public class CommandSpammerScreen extends Screen {
         int color;
         if (s.isRunning()) {
             if (s.isPaused()) {
-                status = "PAUSED"; color = 0xFFFF00;
+                status = "PAUSED";
+                color = 0xFFFF00;
             } else {
                 status = "RUNNING (" + s.getCurrentIndex() + "/" + s.getTotalCommands() + ")";
                 color = 0x00FF00;
             }
         } else {
-            status = "STOPPED"; color = 0xFF4444;
+            status = "STOPPED";
+            color = 0xFF4444;
         }
         ctx.drawCenteredTextWithShadow(this.textRenderer, Text.literal(status), cx, this.height - 18, color);
+
+        // Подсказки
         ctx.drawCenteredTextWithShadow(this.textRenderer,
-                Text.literal("\u00a78Press P to open/close | Lines: " + activeLines),
+                Text.literal("\u00a78P = menu | Scroll = navigate | Lines: " + totalLines),
                 cx, this.height - 8, 0x666666);
     }
 
