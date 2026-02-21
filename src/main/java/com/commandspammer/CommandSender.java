@@ -5,13 +5,12 @@ import net.minecraft.client.MinecraftClient;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 public class CommandSender {
 
     private static CommandSender instance;
 
-    private final List<String> commands = new CopyOnWriteArrayList<>();
+    private List<String> commands = new ArrayList<>();
     private int delayTicks = 20;
     private int currentIndex = 0;
     private int tickCounter = 0;
@@ -30,13 +29,14 @@ public class CommandSender {
     }
 
     public void setCommands(List<String> cmds) {
-        commands.clear();
+        commands = new ArrayList<>();
         for (String cmd : cmds) {
             String trimmed = cmd.trim();
             if (!trimmed.isEmpty()) {
                 commands.add(trimmed);
             }
         }
+        System.out.println("[CommandSpammer] Loaded " + commands.size() + " commands");
     }
 
     public void setDelayTicks(int ticks) {
@@ -48,11 +48,15 @@ public class CommandSender {
     }
 
     public void start() {
-        if (commands.isEmpty()) return;
+        if (commands.isEmpty()) {
+            System.out.println("[CommandSpammer] No commands to send!");
+            return;
+        }
         currentIndex = 0;
         tickCounter = 0;
         running = true;
         paused = false;
+        System.out.println("[CommandSpammer] Started! " + commands.size() + " commands, delay=" + delayTicks + " ticks");
     }
 
     public void stop() {
@@ -60,10 +64,12 @@ public class CommandSender {
         paused = false;
         currentIndex = 0;
         tickCounter = 0;
+        System.out.println("[CommandSpammer] Stopped");
     }
 
     public void togglePause() {
         paused = !paused;
+        System.out.println("[CommandSpammer] " + (paused ? "Paused" : "Resumed"));
     }
 
     public boolean isRunning() {
@@ -99,10 +105,15 @@ public class CommandSender {
                 String command = commands.get(currentIndex);
                 sendCommand(client, command);
                 currentIndex++;
+
+                // Логируем прогресс каждые 10 команд
+                if (currentIndex % 10 == 0) {
+                    System.out.println("[CommandSpammer] Progress: " + currentIndex + "/" + commands.size());
+                }
             } else {
                 running = false;
+                System.out.println("[CommandSpammer] All " + commands.size() + " commands sent!");
                 currentIndex = 0;
-                System.out.println("[CommandSpammer] Все команды отправлены!");
             }
         }
     }
@@ -117,9 +128,8 @@ public class CommandSender {
             } else {
                 client.player.networkHandler.sendChatMessage(command);
             }
-            System.out.println("[CommandSpammer] Sent: " + command);
         } catch (Exception e) {
-            System.err.println("[CommandSpammer] Error sending: " + command);
+            System.err.println("[CommandSpammer] Error sending command #" + currentIndex + ": " + command);
             e.printStackTrace();
         }
     }
